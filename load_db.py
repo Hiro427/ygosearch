@@ -1,7 +1,7 @@
 from dotenv import load_dotenv
 import os
 import json
-import time 
+import time
 import boto3
 import psycopg
 import requests
@@ -10,17 +10,15 @@ from typing import List, Optional, Dict, Set
 
 # TODO: Double Check Code
 
-load_dotenv(dotenv_path='../.env')
+load_dotenv()
 
-s3 = boto3.client('s3')
+s3 = boto3.client("s3")
 bucket = "cardimagestorage"
-
 
 
 conn = psycopg.connect(os.environ["INSERT_DATABASE_URL"])
 
 cur = conn.cursor()
-
 
 
 cur.execute("""
@@ -44,8 +42,9 @@ cur.execute("""
 
 conn.commit()
 
+
 @dataclass
-class Card: 
+class Card:
     id: int = 0
     name: str = "None"
     desc: str = "None"
@@ -64,25 +63,40 @@ class Card:
     banlist_info: Optional[Dict[str, str]] = None
 
     # NOTE: Need new API response data from ?misc=yes endpoint
-    #not using these
+    # not using these
     type: str = "None"
-    typeline:List[str] = field(default_factory=list) 
+    typeline: List[str] = field(default_factory=list)
     frameType: str = "None"
     ygoprodeck_url: str = "None"
     card_sets: List[dict] = field(default_factory=list)
     card_images: List[dict] = field(default_factory=list)
     card_prices: List[dict] = field(default_factory=list)
- 
 
-
-    def insertDefaultMonsters(self) -> None: 
+    def insertDefaultMonsters(self) -> None:
         banlist_list = [f"{k}:{v}" for k, v in (self.banlist_info or {}).items()]
-        cur.execute("""
+        cur.execute(
+            """
             INSERT INTO all_cards_search (source_id, name, humanReadableCardType, "desc", race,level, atk, def, scale, attribute, archetype, linkval, linkmarkers, banlistInfo)
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
-        """, (self.id, self.name, self.humanReadableCardType, self.desc, self.race, self.level, self.atk, self.defe, self.scale, self.attribute, self.archetype, self.linkval, self.linkmarkers, banlist_list))
+        """,
+            (
+                self.id,
+                self.name,
+                self.humanReadableCardType,
+                self.desc,
+                self.race,
+                self.level,
+                self.atk,
+                self.defe,
+                self.scale,
+                self.attribute,
+                self.archetype,
+                self.linkval,
+                self.linkmarkers,
+                banlist_list,
+            ),
+        )
         conn.commit()
-
 
 
 # Get existing source_ids from database
@@ -91,27 +105,25 @@ def get_existing_source_ids() -> Set[int]:
     return {row[0] for row in cur.fetchall()}
 
 
-
 existing_ids = get_existing_source_ids()
 print(f"Found {len(existing_ids)} existing records in database")
 
-with open("data_new.json", "r") as file: 
+with open("data_new.json", "r") as file:
     d = json.load(file)
     data = d["data"]
 
 new_cards_count = 0
-for card in data[::]:  
+for card in data[::]:
+    if card["id"] in existing_ids:
+        continue
 
-    if card["id"] in existing_ids: 
-        continue 
-
-    card["defe"] = card.pop('def', 0) 
-    c = Card(**card)  
-    if "skill" in c.humanReadableCardType.lower(): 
-        continue 
-    else: 
-        c.insertDefaultMonsters()  
-        # TODO: Make this a class function 'c.UploadToS3' 
+    card["defe"] = card.pop("def", 0)
+    c = Card(**card)
+    if "skill" in c.humanReadableCardType.lower():
+        continue
+    else:
+        c.insertDefaultMonsters()
+        # TODO: Make this a class function 'c.UploadToS3'
         # NOTE: Get cropped images from API > S3
         image_url = card["card_images"][0]["image_url"]
         filename = image_url.split("/")[-1]
@@ -122,9 +134,9 @@ for card in data[::]:
             time.sleep(0.2)
             print(f"Uploaded {filename} to S3")
         else:
-            print(f"Failed to download {url}: {response.status_code}") 
+            print(f"Failed to download {url}: {response.status_code}")
         print(card["name"])
-        new_cards_count += 1  
+        new_cards_count += 1
 
 
 print(f"Inserted {new_cards_count} new cards")
