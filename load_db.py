@@ -108,9 +108,9 @@ def get_existing_source_ids() -> Set[int]:
 existing_ids = get_existing_source_ids()
 print(f"Found {len(existing_ids)} existing records in database")
 
-with open("data_new.json", "r") as file:
-    d = json.load(file)
-    data = d["data"]
+resp = requests.get("https://db.ygoprodeck.com/api/v7/cardinfo.php")
+json_data = resp.json()
+data = json_data["data"]
 
 new_cards_count = 0
 for card in data[::]:
